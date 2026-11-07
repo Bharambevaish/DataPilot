@@ -1,0 +1,12 @@
+# Streamlit settings that apply both locally and when deployed.
+# Secrets do NOT go here - they go in .streamlit/secrets.toml, which is
+# gitignored, or in the Streamlit Cloud "Secrets" box.
+
+[server]
+# Hard cap on uploads, in megabytes. The app checks this too, with a
+# friendlier message, but setting it here means a huge file is rejected
+# before it is ever sent.
+maxUploadSize = 10
+
+[browser]
+gatherUsageStats = false

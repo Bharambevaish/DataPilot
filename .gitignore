@@ -24,3 +24,6 @@ logs/*.jsonl
 .DS_Store
 .idea/
 .vscode/
+
+# Streamlit secrets (never commit the real file)
+.streamlit/secrets.toml
