@@ -1,0 +1,169 @@
+{
+  "_comment": [
+    "The evaluation set for DataPilot.",
+    "Each question has a 'gold_sql' -- the query a human analyst would write.",
+    "evaluate.py runs both the gold SQL and the agent, then compares the RESULTS,",
+    "not the SQL text. Two different queries that return the same numbers are",
+    "both correct, which is why execution accuracy is the right measure here.",
+    "The three 'unanswerable' questions have no gold SQL: the correct behaviour",
+    "is to refuse, and inventing an answer counts as a failure."
+  ],
+  "questions": [
+    {
+      "id": "e01", "difficulty": "easy", "dataset": "sales",
+      "question": "How many orders are there in total?",
+      "gold_sql": "SELECT COUNT(*) AS total_orders FROM sales"
+    },
+    {
+      "id": "e02", "difficulty": "easy", "dataset": "sales",
+      "question": "How many different products are sold?",
+      "gold_sql": "SELECT COUNT(DISTINCT product) AS n_products FROM sales"
+    },
+    {
+      "id": "e03", "difficulty": "easy", "dataset": "sales",
+      "question": "What is the total quantity sold across all orders?",
+      "gold_sql": "SELECT SUM(quantity) AS total_quantity FROM sales"
+    },
+    {
+      "id": "e04", "difficulty": "easy", "dataset": "sales",
+      "question": "What is the average unit price, rounded to 2 decimal places?",
+      "gold_sql": "SELECT ROUND(AVG(unit_price), 2) AS avg_unit_price FROM sales"
+    },
+    {
+      "id": "e05", "difficulty": "easy", "dataset": "sales",
+      "question": "How many orders came from the South region?",
+      "gold_sql": "SELECT COUNT(*) AS south_orders FROM sales WHERE region = 'South'"
+    },
+    {
+      "id": "e06", "difficulty": "easy", "dataset": "sales",
+      "question": "What is the highest unit price in the data?",
+      "gold_sql": "SELECT MAX(unit_price) AS highest_unit_price FROM sales"
+    },
+    {
+      "id": "e07", "difficulty": "easy", "dataset": "sales",
+      "question": "Which regions appear in the data?",
+      "gold_sql": "SELECT DISTINCT region FROM sales ORDER BY region"
+    },
+    {
+      "id": "e08", "difficulty": "easy", "dataset": "sales",
+      "question": "How many orders were given a discount?",
+      "gold_sql": "SELECT COUNT(*) AS discounted_orders FROM sales WHERE discount > 0"
+    },
+    {
+      "id": "e09", "difficulty": "easy", "dataset": "sales",
+      "question": "How many orders are in the Electronics category?",
+      "gold_sql": "SELECT COUNT(*) AS electronics_orders FROM sales WHERE category = 'Electronics'"
+    },
+    {
+      "id": "e10", "difficulty": "easy", "dataset": "shop_orders",
+      "question": "How many customers are there in total?",
+      "gold_sql": "SELECT COUNT(*) AS n_customers FROM customers"
+    },
+
+    {
+      "id": "m01", "difficulty": "medium", "dataset": "sales",
+      "question": "What is the total revenue for each region?",
+      "gold_sql": "SELECT region, ROUND(SUM(quantity * unit_price * (1 - discount)), 2) AS revenue FROM sales GROUP BY region ORDER BY revenue DESC"
+    },
+    {
+      "id": "m02", "difficulty": "medium", "dataset": "sales",
+      "question": "Which single product has the highest total revenue?",
+      "gold_sql": "SELECT product, ROUND(SUM(quantity * unit_price * (1 - discount)), 2) AS revenue FROM sales GROUP BY product ORDER BY revenue DESC LIMIT 1"
+    },
+    {
+      "id": "m03", "difficulty": "medium", "dataset": "sales",
+      "question": "What are the top 5 cities by number of orders?",
+      "gold_sql": "SELECT city, COUNT(*) AS orders FROM sales GROUP BY city ORDER BY orders DESC, city LIMIT 5"
+    },
+    {
+      "id": "m04", "difficulty": "medium", "dataset": "sales",
+      "question": "What is the total revenue by category, highest first?",
+      "gold_sql": "SELECT category, ROUND(SUM(quantity * unit_price * (1 - discount)), 2) AS revenue FROM sales GROUP BY category ORDER BY revenue DESC"
+    },
+    {
+      "id": "m05", "difficulty": "medium", "dataset": "sales",
+      "question": "How many orders were placed in each quarter?",
+      "gold_sql": "SELECT QUARTER(date) AS quarter, COUNT(*) AS orders FROM sales GROUP BY quarter ORDER BY quarter"
+    },
+    {
+      "id": "m06", "difficulty": "medium", "dataset": "sales",
+      "question": "Which month had the highest total revenue?",
+      "gold_sql": "SELECT DATE_TRUNC('month', date) AS month, ROUND(SUM(quantity * unit_price * (1 - discount)), 2) AS revenue FROM sales GROUP BY month ORDER BY revenue DESC LIMIT 1"
+    },
+    {
+      "id": "m07", "difficulty": "medium", "dataset": "sales",
+      "question": "What is the average discount for each category?",
+      "gold_sql": "SELECT category, ROUND(AVG(discount), 4) AS avg_discount FROM sales GROUP BY category ORDER BY avg_discount DESC"
+    },
+    {
+      "id": "m08", "difficulty": "medium", "dataset": "sales",
+      "question": "Which city has the highest average unit price?",
+      "gold_sql": "SELECT city, ROUND(AVG(unit_price), 2) AS avg_unit_price FROM sales GROUP BY city ORDER BY avg_unit_price DESC LIMIT 1"
+    },
+    {
+      "id": "m09", "difficulty": "medium", "dataset": "shop_orders",
+      "question": "How many orders were placed through each channel?",
+      "gold_sql": "SELECT channel, COUNT(*) AS orders FROM orders GROUP BY channel ORDER BY orders DESC"
+    },
+    {
+      "id": "m10", "difficulty": "medium", "dataset": "shop_orders",
+      "question": "What is the total value of delivered orders in each month of 2024?",
+      "gold_sql": "SELECT DATE_TRUNC('month', order_date) AS month, ROUND(SUM(amount), 2) AS total FROM orders WHERE status = 'delivered' GROUP BY month ORDER BY month"
+    },
+
+    {
+      "id": "h01", "difficulty": "hard", "dataset": "shop_orders",
+      "question": "Which customer segment has the highest average order value?",
+      "gold_sql": "SELECT c.segment, ROUND(AVG(o.amount), 2) AS avg_order_value FROM orders o JOIN customers c ON c.customer_id = o.customer_id GROUP BY c.segment ORDER BY avg_order_value DESC LIMIT 1"
+    },
+    {
+      "id": "h02", "difficulty": "hard", "dataset": "shop_orders",
+      "question": "How many customers have never placed an order?",
+      "gold_sql": "SELECT COUNT(*) AS customers_without_orders FROM customers c LEFT JOIN orders o ON c.customer_id = o.customer_id WHERE o.order_id IS NULL"
+    },
+    {
+      "id": "h03", "difficulty": "hard", "dataset": "shop_orders",
+      "question": "Who are the top 3 customers by total amount spent?",
+      "gold_sql": "SELECT c.customer_name, ROUND(SUM(o.amount), 2) AS total_spent FROM orders o JOIN customers c ON c.customer_id = o.customer_id GROUP BY c.customer_id, c.customer_name ORDER BY total_spent DESC LIMIT 3"
+    },
+    {
+      "id": "h04", "difficulty": "hard", "dataset": "sales",
+      "question": "Which region's revenue fell the most, in percentage terms, from Q3 to Q4?",
+      "gold_sql": "WITH q AS (SELECT region, QUARTER(date) AS qtr, SUM(quantity * unit_price * (1 - discount)) AS revenue FROM sales WHERE QUARTER(date) IN (3, 4) GROUP BY region, qtr) SELECT region, ROUND(100.0 * (MAX(CASE WHEN qtr = 4 THEN revenue END) - MAX(CASE WHEN qtr = 3 THEN revenue END)) / MAX(CASE WHEN qtr = 3 THEN revenue END), 2) AS pct_change FROM q GROUP BY region ORDER BY pct_change ASC LIMIT 1"
+    },
+    {
+      "id": "h05", "difficulty": "hard", "dataset": "shop_orders",
+      "question": "What percentage of all orders were cancelled or returned?",
+      "gold_sql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE status IN ('cancelled', 'returned')) / COUNT(*), 2) AS pct_cancelled_or_returned FROM orders"
+    },
+    {
+      "id": "h06", "difficulty": "hard", "dataset": "sales",
+      "question": "Which product grew the most in revenue, in percentage terms, from the first half of the year to the second half?",
+      "gold_sql": "WITH h AS (SELECT product, CASE WHEN MONTH(date) <= 6 THEN 'h1' ELSE 'h2' END AS half, SUM(quantity * unit_price * (1 - discount)) AS revenue FROM sales GROUP BY product, half) SELECT product, ROUND(100.0 * (MAX(CASE WHEN half = 'h2' THEN revenue END) - MAX(CASE WHEN half = 'h1' THEN revenue END)) / MAX(CASE WHEN half = 'h1' THEN revenue END), 2) AS pct_growth FROM h GROUP BY product ORDER BY pct_growth DESC LIMIT 1"
+    },
+    {
+      "id": "h07", "difficulty": "hard", "dataset": "shop_orders",
+      "question": "Which city has the most Enterprise customers who have placed at least one order?",
+      "gold_sql": "SELECT c.city, COUNT(DISTINCT c.customer_id) AS enterprise_customers FROM customers c JOIN orders o ON o.customer_id = c.customer_id WHERE c.segment = 'Enterprise' GROUP BY c.city ORDER BY enterprise_customers DESC, c.city LIMIT 1"
+    },
+
+    {
+      "id": "u01", "difficulty": "unanswerable", "dataset": "sales",
+      "question": "What is the profit margin on each product?",
+      "gold_sql": null,
+      "why_unanswerable": "There is no cost column, so profit cannot be worked out from this data."
+    },
+    {
+      "id": "u02", "difficulty": "unanswerable", "dataset": "sales",
+      "question": "Which salesperson closed the most deals this year?",
+      "gold_sql": null,
+      "why_unanswerable": "The sales table records no salesperson or employee at all."
+    },
+    {
+      "id": "u03", "difficulty": "unanswerable", "dataset": "shop_orders",
+      "question": "What is the average age of our customers?",
+      "gold_sql": null,
+      "why_unanswerable": "Customers have a signup date but no date of birth or age."
+    }
+  ]
+}

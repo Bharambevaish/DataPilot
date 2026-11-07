@@ -98,10 +98,20 @@ RULES, in order of importance:
    categories, or showing a change over time. Never chart a single number.
    Call it at most once, after you have the result you want to show.
 
-9. Your final answer must be 1-3 plain sentences that directly answer the
-   question, including the actual figures and their units. Do not include SQL,
-   markdown tables, or bullet lists -- the app already shows the user the query
-   and the result table underneath your answer.
+9. When the answer is about a particular thing -- a region, a product, a
+   customer, a month -- SELECT that identifying column alongside the number.
+   A result table containing only a bare number does not show the reader what
+   the number refers to.
+
+10. Never invent a unit or a currency symbol. If the data does not record what
+    currency an amount is in, give the plain number with no symbol in front
+    of it.
+
+11. Your final answer must be 1-3 plain sentences of ordinary prose that
+    directly answer the question, including the actual figures. Write it as
+    sentences, not as a list: no bullet points, no numbered lists, no bold
+    markdown, no headings, no SQL and no tables. The app already shows the
+    user the query and the result table underneath your answer.
 """
 
 
@@ -205,6 +215,53 @@ def _parse_arguments(raw: str) -> dict[str, Any]:
         return {}
 
 
+# How long to wait before retrying after a rate limit, in seconds. Groq's free
+# tier limits tokens per minute, so the waits have to be long enough for the
+# window to roll over -- retrying after 200ms just burns the budget again.
+RATE_LIMIT_BACKOFF = (3, 8, 20, 40)
+
+# Give up on a single HTTP request after this long, rather than waiting on the
+# SDK's much longer default.
+REQUEST_TIMEOUT_SECONDS = 90.0
+
+
+def _is_rate_limit(error: Exception) -> bool:
+    """Spot a rate-limit rejection, whatever shape the SDK gives it."""
+    if type(error).__name__ in {"RateLimitError", "TooManyRequests"}:
+        return True
+    if getattr(error, "status_code", None) == 429:
+        return True
+    text = str(error).lower()
+    return "rate limit" in text or "429" in text or "too many requests" in text
+
+
+def _is_timeout(error: Exception) -> bool:
+    """Spot a request that timed out or lost its connection."""
+    if type(error).__name__ in {"APITimeoutError", "APIConnectionError",
+                                "ReadTimeout", "ConnectTimeout", "Timeout"}:
+        return True
+    text = str(error).lower()
+    return "timed out" in text or "timeout" in text or "connection error" in text
+
+
+def _retry_after_seconds(error: Exception) -> float | None:
+    """Use the server's own Retry-After hint when it sends one."""
+    response = getattr(error, "response", None)
+    headers = getattr(response, "headers", None)
+    if not headers:
+        return None
+    for name in ("retry-after", "x-ratelimit-reset-tokens", "x-ratelimit-reset-requests"):
+        raw = headers.get(name)
+        if not raw:
+            continue
+        try:
+            # Values arrive either as plain seconds or as "7.66s".
+            return float(str(raw).rstrip("s"))
+        except ValueError:
+            continue
+    return None
+
+
 class Agent:
     """
     Runs one agent loop per question against one loaded dataset.
@@ -243,7 +300,13 @@ class Agent:
         except ImportError as error:  # pragma: no cover
             raise AgentError("The 'groq' package is not installed. Run: pip install groq") from error
 
-        self._client = Groq(api_key=key)
+        # An explicit per-request timeout matters: without one a stalled
+        # request can hang for ten minutes and look like the app has frozen.
+        # Found when an evaluation run sat idle for 17 minutes on a single
+        # hung call. max_retries covers transient connection errors; rate
+        # limits are handled separately in _call_model, because those need
+        # much longer waits than the SDK's default.
+        self._client = Groq(api_key=key, timeout=REQUEST_TIMEOUT_SECONDS, max_retries=2)
         self.schema_text = build_schema_text(store, include_value_hints=include_value_hints)
 
     # -- the prompt ----------------------------------------------------------
@@ -252,6 +315,38 @@ class Agent:
         return SYSTEM_PROMPT.format(
             schema=self.schema_text, refusal_phrase=REFUSAL_PHRASE
         )
+
+    # -- talking to the model ------------------------------------------------
+
+    def _call_model(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]):
+        """
+        Send one request, retrying politely if we are rate limited.
+
+        Groq's free tier caps tokens per minute. Without this, a burst of
+        questions (the evaluation suite, or an enthusiastic user) turns into a
+        wall of failures that look like bugs but are only impatience.
+        """
+        last_error: Exception | None = None
+
+        for attempt in range(len(RATE_LIMIT_BACKOFF) + 1):
+            try:
+                return self._client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,            # type: ignore[arg-type]
+                    tools=tools,                  # type: ignore[arg-type]
+                    tool_choice="auto",
+                    temperature=0,                # same question -> same answer
+                    max_tokens=2000,
+                )
+            except Exception as error:            # noqa: BLE001
+                last_error = error
+                retryable = _is_rate_limit(error) or _is_timeout(error)
+                if not retryable or attempt == len(RATE_LIMIT_BACKOFF):
+                    raise
+                wait = _retry_after_seconds(error) or RATE_LIMIT_BACKOFF[attempt]
+                time.sleep(min(wait + 0.5, 60))
+
+        raise last_error                          # pragma: no cover
 
     # -- the loop ------------------------------------------------------------
 
@@ -287,14 +382,7 @@ class Agent:
                 turns = turn + 1
 
                 try:
-                    response = self._client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,            # type: ignore[arg-type]
-                        tools=toolbox.definitions(),  # type: ignore[arg-type]
-                        tool_choice="auto",
-                        temperature=0,                # same question -> same answer
-                        max_tokens=2000,
-                    )
+                    response = self._call_model(messages, toolbox.definitions())
                 except Exception as error:            # noqa: BLE001
                     error_message = _readable_api_error(error)
                     break
