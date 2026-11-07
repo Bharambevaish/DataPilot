@@ -217,6 +217,34 @@ decent argument for having an evaluation suite at all.
 
 ---
 
+## An experiment still to run: do the value hints earn their place?
+
+`src/schema.py` can describe the data with or without **value hints** -- the
+min/max of numbers and dates, and the full list of values for a
+low-cardinality column like `region ('East', 'North', 'South', 'West')`. The
+claim is that these hints are what stop the agent writing `region = 'south'`
+or inventing a category that does not exist, and they are the single biggest
+reason the schema text is as long as it is.
+
+That claim is testable, and the switch is already wired up:
+
+```bash
+python eval/evaluate.py --label no-hints --no-hints --workers 1
+```
+
+```bash
+python eval/compare_runs.py v2-improved no-hints
+```
+
+I was not able to complete this run: with the hints removed the agent calls
+`describe_table` before almost every query, which roughly doubles the tokens
+per question, and the run exhausted Groq's free-tier tokens-per-minute budget.
+The backoff then stretched each model call to minutes. It is a genuine finding
+in itself -- **removing the hints makes the agent do more work, not less** --
+but it is not a measured accuracy figure, so no number is claimed here.
+
+To run it on a paid tier, or overnight on a free one, use the commands above.
+
 ## Honest limitations of this evaluation
 
 - **30 questions on synthetic data.** Enough to catch regressions, not enough

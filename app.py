@@ -160,7 +160,7 @@ def sidebar() -> None:
             if st.button(
                 info["label"],
                 key=f"load_{name}",
-                use_container_width=True,
+                width="stretch",
                 type="primary" if is_current else "secondary",
                 disabled=is_current,
             ):
@@ -199,7 +199,7 @@ def sidebar() -> None:
             with st.expander("Preview data"):
                 for table in store.tables.values():
                     st.caption(f"{table.name} ({table.source})")
-                    st.dataframe(table.frame.head(50), use_container_width=True,
+                    st.dataframe(table.frame.head(50), width="stretch",
                                  hide_index=True)
 
         st.divider()
@@ -272,7 +272,7 @@ def render_answer(entry: dict[str, Any]) -> None:
     # 3. The result table.
     if outcome.result is not None and not outcome.result.is_empty:
         st.caption(f"Result -- {outcome.result.row_count:,} row(s)")
-        st.dataframe(outcome.result.dataframe, use_container_width=True, hide_index=True)
+        st.dataframe(outcome.result.dataframe, width="stretch", hide_index=True)
         for note in outcome.result.notes:
             st.caption(note)
     elif outcome.result is not None and outcome.result.is_empty:
@@ -285,7 +285,7 @@ def render_answer(entry: dict[str, Any]) -> None:
     # 4. The chart.
     figure = entry.get("figure")
     if figure is not None:
-        st.plotly_chart(figure, use_container_width=True,
+        st.plotly_chart(figure, width="stretch",
                         key=f"chart_{entry['id']}", config={"displaylogo": False})
         if entry.get("chart_note"):
             st.caption(entry["chart_note"])
@@ -371,7 +371,7 @@ def ask_tab() -> None:
             for column, question in zip(columns, questions):
                 with column:
                     if st.button(question, key=f"example_{abs(hash(question))}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state.pending_question = question
                         st.rerun()
 
@@ -463,7 +463,7 @@ def logs_tab() -> None:
                     if c in frame.columns]
     st.dataframe(
         frame[show_columns].sort_values("timestamp", ascending=False),
-        use_container_width=True, hide_index=True,
+        width="stretch", hide_index=True,
         column_config={
             "timestamp": st.column_config.DatetimeColumn("When", format="D MMM, HH:mm"),
             "question": st.column_config.TextColumn("Question", width="large"),

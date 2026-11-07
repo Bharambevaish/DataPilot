@@ -1,5 +1,5 @@
 # DataPilot dependencies (Python 3.10+)
-streamlit>=1.32,<2.0        # web UI
+streamlit>=1.50,<2.0        # web UI (1.50+ for the width="stretch" API)
 pandas>=2.0,<4.0            # reading and shaping tables
 openpyxl>=3.1,<4.0          # lets pandas read .xlsx files
 duckdb>=0.10                # SQL engine that runs on local files

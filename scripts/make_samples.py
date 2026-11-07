@@ -16,7 +16,12 @@ so the demo question "which region's sales dropped the most last quarter?"
 has a real, checkable answer.
 
 The random seed is fixed, so re-running this script reproduces the exact same
-files. That matters because the evaluation suite stores expected answers.
+data. That matters because the evaluation suite stores expected answers.
+
+(Small caveat: sales.csv comes out byte-for-byte identical every time, but
+shop_orders.xlsx does not, because openpyxl stamps the creation time into the
+.xlsx zip. The rows inside are identical -- only the timestamp differs -- so
+git may show the file as changed after a re-run even though the data has not.)
 """
 
 from __future__ import annotations

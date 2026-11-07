@@ -200,6 +200,56 @@ def test_answer_must_come_from_a_query(store) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 3b. A failure after a successful query still shows the result
+# ---------------------------------------------------------------------------
+
+def test_partial_result_is_kept(store) -> None:
+    print("\n3b. If the summary fails, the query result is still shown")
+
+    class FailsAfterQuery(FakeClient):
+        """Answers the first turn with a query, then dies like a rate limit."""
+
+        def __init__(self) -> None:
+            super().__init__([
+                ("tool", "run_sql",
+                 {"query": "SELECT COUNT(*) AS n FROM sales"}),
+            ])
+            outer = self
+
+            class Completions:
+                def create(self, **kwargs):
+                    outer.turns += 1
+                    outer.conversations.append(list(kwargs.get("messages", [])))
+                    if outer.replies:
+                        import json
+                        _, name, arguments = outer.replies.pop(0)
+                        call = FakeToolCall(
+                            id=f"call_{outer.turns}",
+                            function=FakeFunction(name=name,
+                                                  arguments=json.dumps(arguments)),
+                        )
+                        return FakeResponse(
+                            [FakeChoice(FakeMessage(content="", tool_calls=[call]))])
+                    raise RuntimeError("rate limit reached")
+
+            class Chat:
+                completions = Completions()
+
+            self.chat = Chat()
+
+    agent = Agent(store, api_key="test-key-not-used")
+    agent._client = FailsAfterQuery()
+    outcome = agent.ask("How many rows are there?", log=False)
+
+    check("it is not reported as a success", not outcome.success)
+    check("the result table is kept", outcome.result is not None
+          and outcome.result.row_count == 1)
+    check("the SQL is kept", outcome.sql is not None and "COUNT" in outcome.sql.upper())
+    check("the message says the result is still there",
+          "result table" in outcome.answer.lower(), outcome.answer[:120])
+
+
+# ---------------------------------------------------------------------------
 # 4. The step cap
 # ---------------------------------------------------------------------------
 
@@ -320,6 +370,7 @@ def main() -> int:
         test_self_correction(store)
         test_refusal(store)
         test_answer_must_come_from_a_query(store)
+        test_partial_result_is_kept(store)
         test_step_cap(store)
         test_chart_binding(store)
         test_logging(store)

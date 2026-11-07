@@ -426,7 +426,18 @@ class Agent:
 
         # Work out what to report.
         if error_message and not final_answer:
-            answer_text = error_message
+            # The query may well have succeeded and only the final summarising
+            # turn failed -- a rate limit, say. Throwing the result away then
+            # would be wasteful: the user still gets the SQL and the table,
+            # which is most of what they asked for.
+            if toolbox.last_result is not None:
+                answer_text = (
+                    f"I ran the query below and got a result, but could not write "
+                    f"the summary: {error_message} The SQL and the result table "
+                    "are shown underneath, so the answer is still there."
+                )
+            else:
+                answer_text = error_message
             success = False
         elif not final_answer:
             answer_text = "I could not produce an answer for that question."
