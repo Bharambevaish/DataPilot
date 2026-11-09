@@ -78,9 +78,36 @@ def init_state() -> None:
         "history": [],             # the chat, as a list of dicts
         "pending_question": None,  # set by the example-question buttons
         "questions_asked": 0,      # for the demo-mode cap
+        "autoload_error": None,    # why the startup dataset could not be loaded
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
+
+
+# Which sample to open with. The file ships in the repository, so a fresh
+# deployment has data without anyone running a script first.
+DEFAULT_SAMPLE = "sales"
+
+
+def ensure_data_loaded() -> None:
+    """
+    Open a sample dataset the first time someone visits.
+
+    Nobody should have to click anything before they can ask a question --
+    especially on the public demo, where uploads are switched off and the
+    samples are the only data there is. This runs once: as soon as a store
+    exists (this one, or one the visitor chose) it does nothing.
+    """
+    if st.session_state.store is not None or st.session_state.autoload_error:
+        return
+    try:
+        store = load_sample_dataset(DEFAULT_SAMPLE)
+    except DataLoadError as error:
+        # Remember the failure so we do not retry it on every rerun.
+        st.session_state.autoload_error = str(error)
+        return
+    set_store(store, f"sample:{DEFAULT_SAMPLE}",
+              SAMPLE_DATASETS[DEFAULT_SAMPLE]["label"])
 
 
 def set_store(store: DataStore, key: str, label: str) -> None:
@@ -252,6 +279,12 @@ def handle_upload(uploaded_files: list[Any], limit_mb: int) -> None:
 # Drawing one answer
 # ---------------------------------------------------------------------------
 
+def looks_rate_limited(outcome: AgentAnswer) -> bool:
+    """Was this failure Groq's rate limit rather than a real problem?"""
+    text = f"{outcome.error or ''} {outcome.answer or ''}".lower()
+    return "rate limit" in text
+
+
 def render_answer(entry: dict[str, Any]) -> None:
     """Draw one assistant turn: the words, the SQL, the table, the chart, the steps."""
     outcome: AgentAnswer = entry["outcome"]
@@ -259,6 +292,18 @@ def render_answer(entry: dict[str, Any]) -> None:
     # 1. The answer in words.
     if outcome.refused:
         st.warning(outcome.answer, icon=":material/help:")
+    elif not outcome.success and looks_rate_limited(outcome):
+        # The free Groq tier limits tokens per minute. That is a queue, not a
+        # fault, so it gets a softer message than a red error -- and if a query
+        # did run before the limit was hit, its SQL and table are still shown
+        # underneath this.
+        st.warning(
+            "The free Groq tier is rate limited at the moment, so this question "
+            "could not be finished. Wait about a minute and ask again. "
+            "(Running DataPilot locally with your own API key avoids the shared "
+            "limit entirely.)",
+            icon=":material/hourglass_top:",
+        )
     elif not outcome.success:
         st.error(outcome.answer, icon=":material/error:")
     else:
@@ -353,11 +398,24 @@ def ask_tab() -> None:
     store: DataStore | None = st.session_state.store
 
     if store is None:
-        st.info(
-            "Pick a sample dataset in the sidebar, or upload a CSV or Excel file, "
-            "and then ask a question about it in plain English.",
-            icon=":material/arrow_back:",
-        )
+        # Normally unreachable: a sample dataset is opened at startup. We only
+        # get here if that failed, so say what actually went wrong rather than
+        # telling someone to click a button that will not work either.
+        if st.session_state.autoload_error:
+            st.error(
+                f"The sample data could not be loaded: {st.session_state.autoload_error}",
+                icon=":material/error:",
+            )
+            st.caption(
+                "If you are running this locally, generate the samples first:  "
+                "`python scripts/make_samples.py`"
+            )
+        else:
+            st.info(
+                "Pick a sample dataset in the sidebar, or upload a CSV or Excel "
+                "file, and then ask a question about it in plain English.",
+                icon=":material/arrow_back:",
+            )
         return
 
     # Example questions for the sample datasets.
@@ -457,6 +515,19 @@ def logs_tab() -> None:
 
     st.divider()
 
+    # On the public demo the log file is shared by everyone who visits, so the
+    # question text is withheld -- otherwise each visitor could read what
+    # everyone else had typed. The aggregate numbers above stay, because they
+    # are the point of the tab and they identify nobody.
+    if config.demo_mode():
+        st.info(
+            "On this public demo the individual questions are not listed, because "
+            "the log is shared by everyone who visits. Run DataPilot locally to see "
+            "the full history of your own questions.",
+            icon=":material/visibility_off:",
+        )
+        return
+
     show_columns = [c for c in
                     ["timestamp", "question", "success", "refused", "self_corrections",
                      "duration_seconds", "sql", "error"]
@@ -482,6 +553,7 @@ def logs_tab() -> None:
 
 def main() -> None:
     init_state()
+    ensure_data_loaded()
 
     st.title("DataPilot")
     st.caption(

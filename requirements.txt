@@ -1,9 +1,16 @@
-# DataPilot dependencies (Python 3.10+)
+# DataPilot dependencies (Python 3.10+; tested on 3.12 and 3.13)
+#
+# Every entry has an upper bound. That is deliberate: this app is deployed on
+# Streamlit Community Cloud, which reinstalls dependencies when it rebuilds.
+# Without an upper bound a future major release could break a running
+# deployment with no change from me. The lower bounds are the oldest versions
+# the code is written against; the upper bounds exclude the next major.
+
 streamlit>=1.50,<2.0        # web UI (1.50+ for the width="stretch" API)
 pandas>=2.0,<4.0            # reading and shaping tables
 openpyxl>=3.1,<4.0          # lets pandas read .xlsx files
-duckdb>=0.10                # SQL engine that runs on local files
-sqlglot>=22.0               # parses SQL so we can check it is safe
-plotly>=5.18                # charts
-groq>=0.11                  # Groq LLM client (tool calling)
-python-dotenv>=1.0          # loads .env in local development
+duckdb>=1.0,<3.0            # SQL engine that runs on local files
+sqlglot>=25.0,<32.0         # parses SQL so we can check it is safe
+plotly>=5.18,<8.0           # charts
+groq>=0.11,<2.0             # Groq LLM client (tool calling)
+python-dotenv>=1.0,<2.0     # loads .env in local development

@@ -59,15 +59,88 @@ def set_environment(**values: str) -> None:
 
 # ---------------------------------------------------------------------------
 
-def test_no_data_yet() -> None:
-    print("\n1. With nothing loaded, the app explains what to do")
+def test_runs_without_an_api_key() -> None:
+    print("\n1. The app starts even with no API key configured")
     set_environment(DEMO_MODE="false", GROQ_API_KEY="")
     app = AppTest.from_file(APP, default_timeout=60).run()
 
     check("the app runs without an exception", not app.exception,
           str(app.exception))
-    check("it asks you to pick a dataset",
-          "pick a sample dataset" in all_text(app), all_text(app)[:160])
+    check("no stack trace is shown to the user",
+          "traceback" not in all_text(app))
+    # The key is only needed to ANSWER a question, so the page must still
+    # render and the data must still load without one.
+    check("the data still loads", app.session_state["store"] is not None)
+
+
+def test_missing_sample_files_explain_themselves() -> None:
+    print("\n1a. If the sample files are missing, the app says so plainly")
+    set_environment(DEMO_MODE="false")
+
+    from src import config
+    sales = config.SAMPLES_DIR / "sales.csv"
+    hidden = sales.with_suffix(".csv.hidden-for-test")
+    if not sales.exists():
+        check("sales.csv is present to begin with", False)
+        return
+
+    sales.rename(hidden)
+    try:
+        app = AppTest.from_file(APP, default_timeout=60).run()
+        text = all_text(app)
+        check("it does not crash", not app.exception, str(app.exception))
+        check("it says the sample data is missing",
+              "sample data is missing" in text, text[:200])
+        check("it tells you how to fix it",
+              "make_samples.py" in text, text[:200])
+    finally:
+        hidden.rename(sales)
+
+
+def test_sample_data_loads_on_startup() -> None:
+    print("\n1b. A sample dataset is open as soon as the app starts")
+    set_environment(DEMO_MODE="false")
+    app = AppTest.from_file(APP, default_timeout=60).run()
+
+    store = app.session_state["store"]
+    check("a dataset is loaded without anyone clicking", store is not None)
+    check("no autoload error", not app.session_state["autoload_error"],
+          str(app.session_state["autoload_error"]))
+    if store is not None:
+        check("it is the sales sample", "sales" in store.table_names(),
+              str(store.table_names()))
+        check("the rows are really there", store.total_rows() > 4000,
+              str(store.total_rows()))
+    check("the chat input is ready immediately", bool(app.chat_input))
+    check("it does not ask you to pick a dataset first",
+          "pick a sample dataset" not in all_text(app))
+
+
+def test_demo_hides_other_visitors_questions() -> None:
+    print("\n1c. The public demo does not show visitors each other's questions")
+    set_environment(DEMO_MODE="true", MAX_QUESTIONS_PER_SESSION="5")
+
+    # Put a question in the log, as another visitor would have done.
+    from src import logger
+    logger.clear_log()
+    logger.log_question(question="a previous visitor's private question",
+                        answer="42", sql="SELECT 1", success=True)
+    try:
+        app = AppTest.from_file(APP, default_timeout=60).run()
+        # Switch to the logs tab by rendering it: AppTest renders all tabs.
+        text = all_text(app)
+        check("the other visitor's question is not shown",
+              "previous visitor's private question" not in text)
+        check("it explains why", "not listed" in text, text[-200:])
+
+        # ...but with demo mode off, the history is shown as normal.
+        set_environment(DEMO_MODE="false")
+        app = AppTest.from_file(APP, default_timeout=60).run()
+        shown = any("previous visitor" in str(df.value.to_string())
+                    for df in app.dataframe)
+        check("running locally, your own history IS shown", shown)
+    finally:
+        logger.clear_log()
 
 
 def test_normal_mode_allows_uploads() -> None:
@@ -99,14 +172,13 @@ def test_demo_mode_question_cap() -> None:
     app = AppTest.from_file(APP, default_timeout=60)
     app.run()
 
-    # Load a dataset by clicking the sidebar button, the way a visitor would.
-    sample_buttons = [b for b in app.button if "Sales" in str(b.label)]
-    check("the sample dataset button is there", bool(sample_buttons))
-    if not sample_buttons:
-        return
-    sample_buttons[0].click().run()
-
-    check("the dataset loaded", app.session_state["store"] is not None)
+    # No clicking needed: a dataset is already open at startup. The button for
+    # the dataset currently loaded is deliberately disabled, which is itself
+    # worth asserting -- it is how a visitor sees which one they are on.
+    check("the dataset is already loaded", app.session_state["store"] is not None)
+    current = [b for b in app.button if "Sales" in str(b.label)]
+    check("the button for the loaded dataset is disabled",
+          bool(current) and current[0].disabled)
     check("the chat input is available before the cap",
           bool(app.chat_input) and not app.chat_input[0].disabled)
     check("no cap warning before the cap",
@@ -136,9 +208,11 @@ def test_sidebar_reports_loaded_tables() -> None:
     app = AppTest.from_file(APP, default_timeout=60)
     app.run()
 
+    # Switching away from the startup dataset: that button is enabled.
     shop = [b for b in app.button if "Shop orders" in str(b.label)]
+    check("the other sample's button is offered and enabled",
+          bool(shop) and not shop[0].disabled)
     if not shop:
-        check("the shop_orders sample button is there", False)
         return
     shop[0].click().run()
 
@@ -155,7 +229,10 @@ def main() -> int:
     print("=" * 74)
 
     try:
-        test_no_data_yet()
+        test_runs_without_an_api_key()
+        test_missing_sample_files_explain_themselves()
+        test_sample_data_loads_on_startup()
+        test_demo_hides_other_visitors_questions()
         test_normal_mode_allows_uploads()
         test_demo_mode_restrictions()
         test_demo_mode_question_cap()

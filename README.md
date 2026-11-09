@@ -66,7 +66,8 @@ before the agent ever sees it.
 
 ## Quick start
 
-Python 3.10 or newer.
+Python 3.10 or newer. Tested on 3.12 and 3.13; `.python-version` pins 3.12,
+which is also what the deployed app uses.
 
 ```bash
 git clone https://github.com/Bharambevaish/DataPilot.git
@@ -130,21 +131,30 @@ python tests/test_agent.py
 python tests/test_app.py
 ```
 
-All three need **no API key** and run in a couple of seconds:
+All three need **no API key** and run in a couple of seconds (91 checks, and
+they pass on both Python 3.12 and 3.13):
 
 | Suite | Checks | What it covers |
 |---|---|---|
 | `test_safety.py` | 30 | 6 kinds of safe query run; 18 kinds of dangerous query refused; row caps and the timeout enforced |
 | `test_agent.py` | 31 | the agent loop, driven by a *scripted* fake model so self-correction, refusal, the step cap and chart binding are proven deterministically |
-| `test_app.py` | 16 | the Streamlit UI headless: demo-mode banner, uploads disabled, the question cap (including off-by-one), the empty state |
+| `test_app.py` | 30 | the Streamlit UI headless: startup data loading, demo-mode banner, uploads disabled, the question cap (including off-by-one), log privacy, missing sample files |
 
 Add `--live` to `test_agent.py` to also ask the real model five questions,
 including one needing a JOIN and one the data cannot answer.
 
-### Deploying
+### Deploying to Streamlit Community Cloud
 
-The app runs on [Streamlit Community Cloud](https://share.streamlit.io). Point
-it at `app.py`, and add this under *Settings -> Secrets*:
+The repository is ready to deploy as-is: the sample data is committed, so the
+app opens with a dataset loaded and nothing has to be generated first.
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+2. **Create app** -> **Deploy a public app from GitHub**.
+3. Repository `Bharambevaish/DataPilot`, branch `main`, main file `app.py`.
+4. Open **Advanced settings** and set **Python version to 3.12**. This is the
+   only place the Python version can be set, and it cannot be changed later
+   without deleting and redeploying the app.
+5. Still in **Advanced settings**, paste into the **Secrets** box:
 
 ```toml
 GROQ_API_KEY = "gsk_your_key_here"
@@ -153,9 +163,15 @@ DEMO_MODE = "true"
 MAX_QUESTIONS_PER_SESSION = "20"
 ```
 
+6. **Deploy**.
+
 `DEMO_MODE = "true"` turns off file uploads, serves only the bundled sample
-data, caps questions per visit, and shows a banner asking people not to upload
-private data.
+data, caps questions per visit, withholds other visitors' questions from the
+logs tab, and shows a banner asking people not to upload private data.
+
+**On the shared free tier**, Groq limits tokens per minute. When that limit is
+reached the app says so and suggests waiting a minute, rather than showing an
+error; if a query had already run, its SQL and result table are still shown.
 
 ---
 
@@ -324,6 +340,7 @@ the metric too.
 ```
 DataPilot/
 ├── app.py                   Streamlit UI (interface only - no SQL, no prompts)
+├── .python-version          pins Python 3.12 for local tooling and deploys
 ├── src/
 │   ├── config.py            settings: st.secrets -> env vars -> .env
 │   ├── data_loader.py       CSV/XLSX -> DuckDB tables, clean column names, detect dates
@@ -344,7 +361,7 @@ DataPilot/
 ├── tests/
 │   ├── test_safety.py       30 checks on the safety layers
 │   ├── test_agent.py        31 checks on the agent loop, using a scripted fake model
-│   └── test_app.py          16 checks on the UI, headless, no API key needed
+│   └── test_app.py          30 checks on the UI, headless, no API key needed
 └── docs/
     └── interview-notes.md   my own notes on every design decision
 ```
